@@ -1,5 +1,3 @@
-version: "3.8"
-
 services:
   txn-service:
     image: txn-risk-service:latest
