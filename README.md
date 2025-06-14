@@ -15,18 +15,6 @@ A **FastAPI** microservice for scoring financial transaction risk using OpenAI, 
 
 ---
 
-## 📦 Quick Installation
 
-1. **Clone the repo**  
-   ```bash
-   git clone https://github.com/nielia2002/txn-risk-service.git
-   cd txn-risk-service
-
-## 2. Create your `.env`
-
-Copy the example file:
-
-```bash
-cp .env.example .env
 
 
