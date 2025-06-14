@@ -1,4 +1,5 @@
 import os
+import logging
 from fastapi import FastAPI, Header, HTTPException
 from pydantic import BaseModel, Field
 from dotenv import load_dotenv
@@ -7,6 +8,13 @@ from openai_client import analyze_transaction
 from notification_client import send_admin_notification
 
 load_dotenv()  # loads API_KEY and ADMIN_WEBHOOK_URL from .env
+
+# Set up a logger
+logger = logging.getLogger("txn-service")
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s %(name)s: %(message)s"
+)
 
 API_KEY = os.getenv("API_KEY")
 
@@ -50,11 +58,10 @@ async def transaction_webhook(
             raise HTTPException(status_code=429, detail=msg)
         raise HTTPException(status_code=502, detail=msg)
 
+    logger.info("Analysis complete for txn %s: %s", payload.transaction_id, analysis)
+
     # 3) Admin notification
-    notification = AdminNotification(
-        transaction=payload,
-        analysis=analysis
-    ).model_dump()
+    notification = AdminNotification(transaction=payload, analysis=analysis).model_dump()
     try:
         await send_admin_notification(notification)
     except Exception as e:

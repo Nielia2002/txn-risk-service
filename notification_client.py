@@ -2,9 +2,17 @@ import os
 from typing import Any, Dict
 import httpx
 from dotenv import load_dotenv
+import logging
 
 load_dotenv()
 WEBHOOK_URL = os.getenv("ADMIN_WEBHOOK_URL")
+
+logger = logging.getLogger("txn-service")
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s %(name)s: %(message)s"
+)
+
 
 async def send_admin_notification(payload: Dict[str, Any]) -> None:
     """
@@ -14,12 +22,11 @@ async def send_admin_notification(payload: Dict[str, Any]) -> None:
     if not WEBHOOK_URL:
         raise RuntimeError("ADMIN_WEBHOOK_URL not configured")
 
-    print("Sending admin notification to:", WEBHOOK_URL)
-    print("Payload:", payload)
+    logger.info("Sending admin notification to: %s", WEBHOOK_URL)
+    logger.debug("↪ Payload: %r", payload)
 
     async with httpx.AsyncClient(timeout=10.0) as client:
-        response = await client.post(WEBHOOK_URL, json=payload)
-        # Log the status and body returned by httpbin
-        print(f"Notification response status: {response.status_code}")
-        print("Notification response body:", response.text)
-        response.raise_for_status()
+        r = await client.post(WEBHOOK_URL, json=payload)
+        logger.info(" Notification response status: %d", r.status_code)
+        logger.debug(" Notification response body: %s", r.text)
+        r.raise_for_status()
