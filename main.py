@@ -1,26 +1,34 @@
 import os
 import logging
+
 from fastapi import FastAPI, Header, HTTPException
 from pydantic import BaseModel, Field
 from dotenv import load_dotenv
+from prometheus_fastapi_instrumentator import Instrumentator
 
 from openai_client import analyze_transaction
 from notification_client import send_admin_notification
 
-load_dotenv()  # loads API_KEY and ADMIN_WEBHOOK_URL from .env
+# 1) Load .env
+load_dotenv()
 
-# Set up structured logging
+# 2) Set up structured logging
 logger = logging.getLogger("txn-service")
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s %(levelname)s %(name)s: %(message)s"
 )
 
+# 3) Read API key
 API_KEY = os.getenv("API_KEY")
 
+# 4) Create FastAPI app
 app = FastAPI(title="Transaction Risk Service")
 
+# 5) Instrument app for Prometheus metrics
+Instrumentator().instrument(app).expose(app)
 
+# 6) Define your data models
 class TransactionWebhook(BaseModel):
     transaction_id: str = Field(..., description="Unique transaction ID")
     user_id:        str = Field(..., description="User who made the transaction")
@@ -29,27 +37,26 @@ class TransactionWebhook(BaseModel):
     timestamp:      str = Field(..., description="RFC3339 timestamp of the transaction")
     country:        str = Field(..., description="2-letter country code")
 
-
 class AdminNotification(BaseModel):
     transaction: TransactionWebhook
     analysis: dict
 
-
+# 7) Health check
 @app.get("/")
 async def root():
     return {"message": "txn-risk-service is up!"}
 
-
+# 8) Transaction webhook
 @app.post("/webhook/transaction")
 async def transaction_webhook(
     payload: TransactionWebhook,
     x_api_key: str = Header(...)
 ):
-    # 1) Authenticate
+    # Authenticate
     if x_api_key != API_KEY:
         raise HTTPException(status_code=401, detail="Unauthorized")
 
-    # 2) LLM analysis with error mapping
+    # LLM analysis
     try:
         analysis = analyze_transaction(payload.model_dump())
     except RuntimeError as e:
@@ -58,17 +65,15 @@ async def transaction_webhook(
             raise HTTPException(status_code=429, detail=msg)
         raise HTTPException(status_code=502, detail=msg)
 
-    # Structured log instead of print
     logger.info("Analysis complete for txn %s: %s", payload.transaction_id, analysis)
 
-    # 3) Admin notification
+    # Admin notification
     notification = AdminNotification(transaction=payload, analysis=analysis).model_dump()
     try:
         await send_admin_notification(notification)
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"Notify error: {e}")
 
-    # 4) Success response
     return {
         "status": "received",
         "transaction_id": payload.transaction_id,
