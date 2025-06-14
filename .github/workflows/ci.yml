@@ -61,4 +61,5 @@ jobs:
         with:
           context: .
           push: true
-          tags: ghcr.io/${{ toLower(github.repository_owner) }}/txn-risk-service:latest
+          # `github.repository` is already lowercase "nielia2002/txn-risk-service"
+          tags: ghcr.io/${{ github.repository }}:latest
