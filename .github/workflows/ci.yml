@@ -61,5 +61,5 @@ jobs:
         with:
           context: .
           push: true
-          # `github.repository` is already lowercase "nielia2002/txn-risk-service"
-          tags: ghcr.io/${{ github.repository }}:latest
+          # Hard-coded lowercase owner to satisfy Docker tag requirements
+          tags: ghcr.io/nielia2002/txn-risk-service:latest
