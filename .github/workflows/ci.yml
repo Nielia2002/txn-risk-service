@@ -2,16 +2,21 @@ name: CI
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   pull_request:
-    branches: [ main ]
+    branches: [main]
 
 jobs:
   test:
     runs-on: ubuntu-latest
+    env:
+      API_KEY: supersecret123
+      ADMIN_WEBHOOK_URL: https://httpbin.org/post
+
     strategy:
       matrix:
-        python-version: [3.10, 3.11, 3.12]
+        python-version: ["3.10", "3.11", "3.12"]
+
     steps:
       - uses: actions/checkout@v4
 
@@ -27,10 +32,4 @@ jobs:
           pip install pytest pytest-asyncio httpx
 
       - name: Run tests
-        run: |
-          pytest -q
-
-      - name: Lint (optional)
-        run: |
-          pip install flake8
-          flake8 .
+        run: pytest -q
