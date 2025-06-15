@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field
 from dotenv import load_dotenv
 from prometheus_fastapi_instrumentator import Instrumentator
 
-from huggingface_client import analyze_transaction
+from gemini_client import analyze_transaction
 
 from notification_client import send_admin_notification
 
@@ -24,7 +24,7 @@ logging.basicConfig(
 API_KEY = os.getenv("API_KEY")
 
 # 4) Create FastAPI app
-app = FastAPI(title="Transaction Risk Service")
+app = FastAPI(title="Transaction Risk Service", debug=True)
 
 # 5) Instrument app for Prometheus metrics
 Instrumentator().instrument(app).expose(app)
