@@ -6,7 +6,8 @@ from pydantic import BaseModel, Field
 from dotenv import load_dotenv
 from prometheus_fastapi_instrumentator import Instrumentator
 
-from openai_client import analyze_transaction
+from huggingface_client import analyze_transaction
+
 from notification_client import send_admin_notification
 
 # 1) Load .env
