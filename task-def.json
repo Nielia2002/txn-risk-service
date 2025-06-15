@@ -1,0 +1,34 @@
+{
+  "family": "txn-risk-service-task",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "256",
+  "memory": "512",
+  "executionRoleArn": "arn:aws:iam::337909750424:role/ecsTaskExecutionRole",
+  "containerDefinitions": [
+    {
+      "name": "txn-service",
+      "image": "337909750424.dkr.ecr.us-east-1.amazonaws.com/txn-risk-service:latest",
+      "portMappings": [
+        {
+          "containerPort": 8000,
+          "protocol": "tcp"
+        }
+      ],
+      "environment": [
+        { "name": "API_KEY",           "value": "supersecret123"           },
+        { "name": "ADMIN_WEBHOOK_URL", "value": "https://your-admin-webhook.example.com/notify" },
+        { "name": "GEMINI_API_KEY",    "value": "YOUR_GEMINI_API_KEY"       },
+        { "name": "GEMINI_MODEL",      "value": "gemini-2.0-flash"           }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/txn-risk-service",
+          "awslogs-region": "us-east-1",
+          "awslogs-stream-prefix": "ecs"
+        }
+      }
+    }
+  ]
+}
