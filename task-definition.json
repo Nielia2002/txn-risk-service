@@ -1,0 +1,20 @@
+{
+  "family": "txn-risk-task",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "256",
+  "memory": "512",
+  "containerDefinitions": [
+    {
+      "name": "txn-service",
+      "image": "${ACCOUNT_ID}.dkr.ecr.${REGION}.amazonaws.com/${REPO_NAME}:latest",
+      "portMappings": [
+        { "containerPort": 8000, "protocol": "tcp" }
+      ],
+      "environment": [
+        { "name": "API_KEY", "value": "<your API_KEY>" },
+        { "name": "GEMINI_API_KEY", "value": "<your GEMINI_API_KEY>" }
+      ]
+    }
+  ]
+}
