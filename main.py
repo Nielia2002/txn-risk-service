@@ -5,6 +5,7 @@ from fastapi import FastAPI, Header, HTTPException
 from pydantic import BaseModel, Field
 from dotenv import load_dotenv
 from prometheus_fastapi_instrumentator import Instrumentator
+from prometheus_client import Gauge
 
 from gemini_client import analyze_transaction
 
@@ -22,6 +23,12 @@ logging.basicConfig(
 
 # 3) Read API key
 API_KEY = os.getenv("API_KEY")
+
+risk_score_gauge = Gauge(
+    "transaction_risk_score", 
+    "Risk score assigned to each transaction", 
+    ["currency", "country"]
+)
 
 # 4) Create FastAPI app
 app = FastAPI(title="Transaction Risk Service", debug=True)
@@ -53,30 +60,33 @@ async def transaction_webhook(
     payload: TransactionWebhook,
     x_api_key: str = Header(...)
 ):
-    # Authenticate
+    # 1) Authenticate
     if x_api_key != API_KEY:
         raise HTTPException(status_code=401, detail="Unauthorized")
 
-    # LLM analysis
-    try:
-        analysis = analyze_transaction(payload.model_dump())
-    except RuntimeError as e:
-        msg = str(e)
-        if "rate limit" in msg.lower():
-            raise HTTPException(status_code=429, detail=msg)
-        raise HTTPException(status_code=502, detail=msg)
+    # 2) LLM analysis
+    analysis = analyze_transaction(payload.model_dump())
 
+    # ← record the custom metric here
+    risk_score_gauge.labels(
+        currency=payload.currency,
+        country=payload.country
+    ).set(analysis["risk_score"])
+
+    # 3) Logging
     logger.info("Analysis complete for txn %s: %s", payload.transaction_id, analysis)
 
-    # Admin notification
+    # 4) Notify admin…
     notification = AdminNotification(transaction=payload, analysis=analysis).model_dump()
     try:
         await send_admin_notification(notification)
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"Notify error: {e}")
 
+    # 5) Return
     return {
         "status": "received",
         "transaction_id": payload.transaction_id,
         "analysis": analysis
     }
+

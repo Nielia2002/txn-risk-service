@@ -1,0 +1,15 @@
+global:
+  resolve_timeout: 5m
+
+route:
+  receiver: "email-alerts"
+
+receivers:
+  - name: "email-alerts"
+    email_configs:
+      - to: "ops@example.com"
+        from: "prometheus@example.com"
+        smarthost: "smtp.example.com:587"
+        auth_username: "user"
+        auth_identity: "user"
+        auth_password: "password"
