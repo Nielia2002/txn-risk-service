@@ -10,22 +10,11 @@ def client():
 
 @pytest.fixture(autouse=True)
 def stub_and_set_api_key(monkeypatch):
-    """
-    Sets up test environment by stubbing and overriding key functions and variables.
-
-    This function performs the following actions:
-    1. Sets a known API key in the environment and overrides the `API_KEY` in the `main` module.
-    2. Stubs the `analyze_transaction` function in the `main` module to return a fixed response for testing.
-    3. Stubs the `send_admin_notification` function in the `main` module to simulate a no-op asynchronous call.
-
-    Args:
-        monkeypatch: pytest's monkeypatch fixture used to modify or override attributes and environment variables during testing.
-    """
-    # 1) Set a known API_KEY in the environment and override the API_KEY in the main module
+    # Override the service’s API_KEY to match our dummy
     monkeypatch.setenv("API_KEY", "testkey")
     monkeypatch.setattr(main, "API_KEY", "testkey")
 
-    # 2) Stub the LLM call
+    # Stub out the LLM call
     def fake_analyze(txn):
         return {
             "risk_score": 0.42,
@@ -35,7 +24,7 @@ def stub_and_set_api_key(monkeypatch):
         }
     monkeypatch.setattr(main, "analyze_transaction", fake_analyze)
 
-    # 3) Stub the notification call
+    # Stub out notifications
     async def fake_notify(payload):
         return None
     monkeypatch.setattr(main, "send_admin_notification", fake_notify)
@@ -96,11 +85,9 @@ def test_successful_transaction(client: TestClient):
         headers=headers
     )
     assert res.status_code == status.HTTP_200_OK
-
     body = res.json()
     assert body["status"] == "received"
     assert body["transaction_id"] == "t3"
-
     analysis = body["analysis"]
     assert analysis["risk_score"] == 0.42
     assert analysis["reasoning"] == "Test reasoning."
@@ -110,7 +97,7 @@ def test_successful_transaction(client: TestClient):
 
 @pytest.mark.parametrize("exc,expected", [
     (RuntimeError("rate limit"), status.HTTP_429_TOO_MANY_REQUESTS),
-    (RuntimeError("something else"), status.HTTP_502_BAD_GATEWAY),
+    (RuntimeError("other error"), status.HTTP_502_BAD_GATEWAY),
 ])
 def test_error_branches(client: TestClient, monkeypatch, exc, expected):
     # Force analyze_transaction to raise
