@@ -12,6 +12,10 @@ jobs:
     env:
       API_KEY: supersecret123
       ADMIN_WEBHOOK_URL: https://httpbin.org/post
+      # Provide a dummy key so gemini_client.OpenAI(...) won't blow up on import
+      GEMINI_API_KEY: dummy-key
+      # Make sure your default model is set (or override here)
+      GEMINI_MODEL: gemini-2.0-flash
     strategy:
       matrix:
         python-version: ["3.10", "3.11", "3.12"]
@@ -37,8 +41,8 @@ jobs:
     needs: test
     runs-on: ubuntu-latest
     permissions:
-      contents: read # for checkout
-      packages: write # to push to GHCR
+      contents: read
+      packages: write
 
     steps:
       - uses: actions/checkout@v4
