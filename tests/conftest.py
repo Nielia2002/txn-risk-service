@@ -1,15 +1,17 @@
 import os
 import sys
-
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-
+import pytest
 from dotenv import load_dotenv
 from fastapi.testclient import TestClient
-import pytest
 
-load_dotenv()               # load API_KEY, GEMINI_API_KEY, etc. into env
+# Add the main application directory to the Python path
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from main import app        # import the FastAPI app from main.py
+# Load any .env you may have locally
+load_dotenv()
+
+# This will be overridden in the test cases
+from main import app
 
 @pytest.fixture(scope="module")
 def client():

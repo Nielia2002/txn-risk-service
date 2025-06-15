@@ -6,17 +6,26 @@ import main
 
 @pytest.fixture(scope="module")
 def client():
-    """
-    A TestClient instance pointing at main.app
-    """
     return TestClient(main.app)
 
 @pytest.fixture(autouse=True)
-def stub_external_calls(monkeypatch):
+def stub_and_set_api_key(monkeypatch):
     """
-    Stub out the real LLM call and the notification call so tests are deterministic.
+    Sets up test environment by stubbing and overriding key functions and variables.
+
+    This function performs the following actions:
+    1. Sets a known API key in the environment and overrides the `API_KEY` in the `main` module.
+    2. Stubs the `analyze_transaction` function in the `main` module to return a fixed response for testing.
+    3. Stubs the `send_admin_notification` function in the `main` module to simulate a no-op asynchronous call.
+
+    Args:
+        monkeypatch: pytest's monkeypatch fixture used to modify or override attributes and environment variables during testing.
     """
-    # 1) Stub analyze_transaction to return a fixed, predictable result
+    # 1) Set a known API_KEY in the environment and override the API_KEY in the main module
+    monkeypatch.setenv("API_KEY", "testkey")
+    monkeypatch.setattr(main, "API_KEY", "testkey")
+
+    # 2) Stub the LLM call
     def fake_analyze(txn):
         return {
             "risk_score": 0.42,
@@ -26,7 +35,7 @@ def stub_external_calls(monkeypatch):
         }
     monkeypatch.setattr(main, "analyze_transaction", fake_analyze)
 
-    # 2) Stub send_admin_notification to do nothing (avoid real HTTP calls)
+    # 3) Stub the notification call
     async def fake_notify(payload):
         return None
     monkeypatch.setattr(main, "send_admin_notification", fake_notify)
@@ -48,7 +57,6 @@ def test_unauthorized_missing_key(client: TestClient):
         "country": "US"
     }
     res = client.post("/webhook/transaction", json=payload)
-    # either FastAPI's validation (422) or our 401 if header present but wrong
     assert res.status_code in (
         status.HTTP_422_UNPROCESSABLE_ENTITY,
         status.HTTP_401_UNAUTHORIZED
@@ -100,16 +108,16 @@ def test_successful_transaction(client: TestClient):
     assert "test factor" in analysis["risk_factors"]
 
 
-@pytest.mark.parametrize("exception,expected_status", [
-    (RuntimeError("OpenAI rate limit exceeded: limit"), status.HTTP_429_TOO_MANY_REQUESTS),
-    (RuntimeError("OpenAI API error: fail"),      status.HTTP_502_BAD_GATEWAY),
+@pytest.mark.parametrize("exc,expected", [
+    (RuntimeError("rate limit"), status.HTTP_429_TOO_MANY_REQUESTS),
+    (RuntimeError("something else"), status.HTTP_502_BAD_GATEWAY),
 ])
-def test_error_branches(client: TestClient, monkeypatch, exception, expected_status):
-    # Force main.analyze_transaction to raise the given RuntimeError
+def test_error_branches(client: TestClient, monkeypatch, exc, expected):
+    # Force analyze_transaction to raise
     monkeypatch.setattr(
         main,
         "analyze_transaction",
-        lambda txn: (_ for _ in ()).throw(exception)
+        lambda txn: (_ for _ in ()).throw(exc)
     )
 
     payload = {
@@ -126,6 +134,5 @@ def test_error_branches(client: TestClient, monkeypatch, exception, expected_sta
         json=payload,
         headers=headers
     )
-
-    assert res.status_code == expected_status
+    assert res.status_code == expected
     assert "detail" in res.json()
