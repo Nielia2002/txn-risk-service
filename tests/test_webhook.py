@@ -6,11 +6,17 @@ import main
 
 @pytest.fixture(scope="module")
 def client():
+    """
+    A TestClient instance pointing at main.app
+    """
     return TestClient(main.app)
 
 @pytest.fixture(autouse=True)
 def stub_external_calls(monkeypatch):
-    # Stub main.analyze_transaction to return a predictable result
+    """
+    Stub out the real LLM call and the notification call so tests are deterministic.
+    """
+    # 1) Stub analyze_transaction to return a fixed, predictable result
     def fake_analyze(txn):
         return {
             "risk_score": 0.42,
@@ -20,19 +26,19 @@ def stub_external_calls(monkeypatch):
         }
     monkeypatch.setattr(main, "analyze_transaction", fake_analyze)
 
-    # Stub main.send_admin_notification to do nothing
+    # 2) Stub send_admin_notification to do nothing (avoid real HTTP calls)
     async def fake_notify(payload):
         return None
     monkeypatch.setattr(main, "send_admin_notification", fake_notify)
 
 
-def test_health_check(client):
+def test_health_check(client: TestClient):
     res = client.get("/")
     assert res.status_code == status.HTTP_200_OK
     assert res.json() == {"message": "txn-risk-service is up!"}
 
 
-def test_unauthorized_missing_key(client):
+def test_unauthorized_missing_key(client: TestClient):
     payload = {
         "transaction_id": "t1",
         "user_id": "u1",
@@ -42,13 +48,14 @@ def test_unauthorized_missing_key(client):
         "country": "US"
     }
     res = client.post("/webhook/transaction", json=payload)
+    # either FastAPI's validation (422) or our 401 if header present but wrong
     assert res.status_code in (
         status.HTTP_422_UNPROCESSABLE_ENTITY,
         status.HTTP_401_UNAUTHORIZED
     )
 
 
-def test_unauthorized_wrong_key(client):
+def test_unauthorized_wrong_key(client: TestClient):
     payload = {
         "transaction_id": "t2",
         "user_id": "u2",
@@ -65,7 +72,7 @@ def test_unauthorized_wrong_key(client):
     assert res.status_code == status.HTTP_401_UNAUTHORIZED
 
 
-def test_successful_transaction(client):
+def test_successful_transaction(client: TestClient):
     payload = {
         "transaction_id": "t3",
         "user_id": "u3",
@@ -81,9 +88,11 @@ def test_successful_transaction(client):
         headers=headers
     )
     assert res.status_code == status.HTTP_200_OK
+
     body = res.json()
     assert body["status"] == "received"
     assert body["transaction_id"] == "t3"
+
     analysis = body["analysis"]
     assert analysis["risk_score"] == 0.42
     assert analysis["reasoning"] == "Test reasoning."
@@ -95,8 +104,8 @@ def test_successful_transaction(client):
     (RuntimeError("OpenAI rate limit exceeded: limit"), status.HTTP_429_TOO_MANY_REQUESTS),
     (RuntimeError("OpenAI API error: fail"),      status.HTTP_502_BAD_GATEWAY),
 ])
-def test_error_branches(client, monkeypatch, exception, expected_status):
-    # Force main.analyze_transaction to raise the specified RuntimeError
+def test_error_branches(client: TestClient, monkeypatch, exception, expected_status):
+    # Force main.analyze_transaction to raise the given RuntimeError
     monkeypatch.setattr(
         main,
         "analyze_transaction",
@@ -117,5 +126,6 @@ def test_error_branches(client, monkeypatch, exception, expected_status):
         json=payload,
         headers=headers
     )
+
     assert res.status_code == expected_status
     assert "detail" in res.json()
