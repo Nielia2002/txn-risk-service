@@ -3,6 +3,7 @@ import logging
 
 from fastapi import FastAPI, Header, HTTPException, status
 from pydantic import BaseModel, Field
+from typing import Optional
 from dotenv import load_dotenv
 from prometheus_fastapi_instrumentator import Instrumentator
 from prometheus_client import Gauge
@@ -39,8 +40,8 @@ Instrumentator().instrument(app).expose(app)
 # 7) Define your data models
 
 class PaymentMethod(BaseModel):
-    type: str = Field(..., description="e.g. 'credit_card', 'paypal', etc.")
-    is_new: bool = Field(..., description="Whether this payment method was recently added")
+    type: str = Field(..., description="e.g. 'credit_card', 'paypal', 'crypto'")
+    is_new: bool = Field(..., description="Whether this method was recently added")
 
 class Merchant(BaseModel):
     category: str = Field(..., description="Merchant category, e.g. 'electronics'")
@@ -52,14 +53,18 @@ class Merchant(BaseModel):
     )
 
 class TransactionWebhook(BaseModel):
-    transaction_id:  str           = Field(..., description="Unique transaction ID")
-    user_id:         str           = Field(..., description="User who made the transaction")
-    amount:          float         = Field(..., gt=0, description="Amount in the given currency")
-    currency:        str           = Field(..., description="ISO currency code, e.g. USD")
-    timestamp:       str           = Field(..., description="RFC3339 timestamp of the transaction")
-    country:         str           = Field(..., description="2-letter country code")
-    payment_method:  PaymentMethod = Field(..., description="Payment method details")
-    merchant:        Merchant      = Field(..., description="Merchant details")
+    transaction_id:  str                 = Field(..., description="Unique transaction ID")
+    user_id:         str                 = Field(..., description="User who made the transaction")
+    amount:          float               = Field(..., gt=0, description="Amount in the given currency")
+    currency:        str                 = Field(..., description="ISO currency code, e.g. USD")
+    timestamp:       str                 = Field(..., description="RFC3339 timestamp of the transaction")
+    country:         str                 = Field(..., description="2-letter country code")
+    payment_method:  Optional[PaymentMethod] = Field(
+        None, description="Optional payment method details"
+    )
+    merchant:        Optional[Merchant]       = Field(
+        None, description="Optional merchant details"
+    )
 
 class AdminNotification(BaseModel):
     transaction: TransactionWebhook
