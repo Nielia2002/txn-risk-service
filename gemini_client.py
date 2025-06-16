@@ -13,31 +13,37 @@ client = OpenAI(
 MODEL = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
 
 def analyze_transaction(txn: dict) -> dict:
-    prompt = (
-    "You are a financial risk analysis engine.  Given the following JSON transaction, output a JSON object with exactly these keys:\n\n"
-    "  • risk_score (0–1)\n"
-    "  • risk_factors (array of strings explaining what drove the score; be sure to consider:\n"
-    "      Payment method indicators: type (card, bank-transfer, crypto), whether it's new to the user, and any known associated risks.\n"
-    "      Merchant factors: merchant category code, known fraud rates for that category, and merchant reputation history.\n"
-    "      Transaction amount, currency, customer and payment-method country alignment, high-value flags, high-risk countries.\n"
-    "  )\n"
-    "  • reasoning (one-paragraph explanation)\n"
-    "  • recommended_action (one sentence)\n\n"
-    f"Here is the transaction:\n\n{json.dumps(txn, indent=2)}\n\nRespond **ONLY** with the JSON object."
-)
+    prompt = f"""
+You are a fraud-risk engine.
+Rate this transaction 0.0–1.0 and return JSON with exactly:
+  • risk_score
+  • risk_factors
+  • reasoning
+  • recommended_action (allow|review|block)
 
+Buckets: 0–0.3=allow,0.3–0.7=review,0.7–1=block.
 
+Consider:
+ • geo: customer vs payment country, IP mismatch, high-risk jurisdictions
+ • timing: odd hours, bursts of activity
+ • amount vs merchant norms
+ • payment method type/new-method risk
+ • merchant category, fraud rate & reputation
+
+Transaction:
+{json.dumps(txn, indent=2)}
+"""
     response = client.chat.completions.create(
         model=MODEL,
         messages=[
-            {"role": "system",  "content": "You analyze transaction risk."},
-            {"role": "user",    "content": prompt},
+            {"role": "system", "content": "You analyze transaction risk."},
+            {"role": "user",   "content": prompt},
         ],
         temperature=0.0
     )
     raw = response.choices[0].message.content or ""
 
-    # remove opening ```json line (with newline) and closing ``` fence
+    # Strip markdown fences if present
     cleaned = re.sub(r"^```(?:json)?\s*\r?\n", "", raw, flags=re.IGNORECASE)
     cleaned = re.sub(r"\r?\n```$", "", cleaned, flags=re.IGNORECASE).strip()
 
