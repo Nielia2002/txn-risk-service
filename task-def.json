@@ -18,7 +18,7 @@
       "environment": [
         { "name": "API_KEY",           "value": "supersecret123"           },
         { "name": "ADMIN_WEBHOOK_URL", "value": "https://webhook.site/58e7b633-30b9-4f10-bb58-5a2b3d248a68" },
-        { "name": "GEMINI_API_KEY",    "value": "AIzaSyDJOLuo9GIHCHZi0fPZdZaBl3mcwSzctBk"       },
+        { "name": "GEMINI_API_KEY",    "value": "AIzaSyAx2PoDjgfj5PzAviVf57we9EugVLGep9g"       },
         { "name": "GEMINI_MODEL",      "value": "gemini-2.0-flash"           }
       ],
       "logConfiguration": {

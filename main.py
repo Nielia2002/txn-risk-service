@@ -58,7 +58,7 @@ async def root():
 @app.post("/webhook/transaction")
 async def transaction_webhook(
     payload: TransactionWebhook,
-    x_api_key: str = Header(..., alias="X-API-Key"),
+    x_api_key: str | None = Header(None, alias="X-API-Key")
 ):
     # 1) Authenticate
     if x_api_key != API_KEY:
