@@ -1,14 +1,13 @@
 import os
 import logging
 
-from fastapi import FastAPI, Header, HTTPException
+from fastapi import FastAPI, Header, HTTPException, status
 from pydantic import BaseModel, Field
 from dotenv import load_dotenv
 from prometheus_fastapi_instrumentator import Instrumentator
 from prometheus_client import Gauge
 
 from gemini_client import analyze_transaction
-
 from notification_client import send_admin_notification
 
 # 1) Load .env
@@ -24,19 +23,20 @@ logging.basicConfig(
 # 3) Read API key
 API_KEY = os.getenv("API_KEY")
 
+# 4) Prometheus gauge for risk score
 risk_score_gauge = Gauge(
-    "transaction_risk_score", 
-    "Risk score assigned to each transaction", 
+    "transaction_risk_score",
+    "Risk score assigned to each transaction",
     ["currency", "country"]
 )
 
-# 4) Create FastAPI app
+# 5) Create FastAPI app
 app = FastAPI(title="Transaction Risk Service", debug=True)
 
-# 5) Instrument app for Prometheus metrics
+# 6) Instrument app for Prometheus metrics
 Instrumentator().instrument(app).expose(app)
 
-# 6) Define your data models
+# 7) Define your data models
 class TransactionWebhook(BaseModel):
     transaction_id: str = Field(..., description="Unique transaction ID")
     user_id:        str = Field(..., description="User who made the transaction")
@@ -47,25 +47,44 @@ class TransactionWebhook(BaseModel):
 
 class AdminNotification(BaseModel):
     transaction: TransactionWebhook
-    analysis: dict
+    analysis:    dict
 
-# 7) Health check
+# 8) Health check
 @app.get("/")
 async def root():
     return {"message": "txn-risk-service is up!"}
 
-# 8) Transaction webhook
+# 9) Transaction webhook
 @app.post("/webhook/transaction")
 async def transaction_webhook(
     payload: TransactionWebhook,
-    x_api_key: str = Header(...)
+    x_api_key: str = Header(..., alias="X-API-Key"),
 ):
     # 1) Authenticate
     if x_api_key != API_KEY:
-        raise HTTPException(status_code=401, detail="Unauthorized")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorized")
 
-    # 2) LLM analysis
-    analysis = analyze_transaction(payload.model_dump())
+    # 2) LLM analysis with error-branching
+    try:
+        analysis = analyze_transaction(payload.model_dump())
+    except RuntimeError as e:
+        msg = str(e)
+        if "rate limit" in msg.lower():
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail=msg
+            )
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=msg
+            )
+    except Exception as e:
+        # unexpected errors
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=str(e)
+        )
 
     # ← record the custom metric here
     risk_score_gauge.labels(
@@ -73,20 +92,19 @@ async def transaction_webhook(
         country=payload.country
     ).set(analysis["risk_score"])
 
-    # 3) Logging
+    # 3) Structured logging
     logger.info("Analysis complete for txn %s: %s", payload.transaction_id, analysis)
 
-    # 4) Notify admin…
+    # 4) Notify admin in background
     notification = AdminNotification(transaction=payload, analysis=analysis).model_dump()
     try:
         await send_admin_notification(notification)
     except Exception as e:
-        raise HTTPException(status_code=502, detail=f"Notify error: {e}")
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=f"Notify error: {e}")
 
-    # 5) Return
+    # 5) Return success response
     return {
         "status": "received",
         "transaction_id": payload.transaction_id,
         "analysis": analysis
     }
-
