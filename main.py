@@ -37,13 +37,29 @@ app = FastAPI(title="Transaction Risk Service", debug=True)
 Instrumentator().instrument(app).expose(app)
 
 # 7) Define your data models
+
+class PaymentMethod(BaseModel):
+    type: str = Field(..., description="e.g. 'credit_card', 'paypal', etc.")
+    is_new: bool = Field(..., description="Whether this payment method was recently added")
+
+class Merchant(BaseModel):
+    category: str = Field(..., description="Merchant category, e.g. 'electronics'")
+    reputation_score: float = Field(
+        ...,
+        ge=0.0,
+        le=1.0,
+        description="Normalized merchant reputation (0.0–1.0)"
+    )
+
 class TransactionWebhook(BaseModel):
-    transaction_id: str = Field(..., description="Unique transaction ID")
-    user_id:        str = Field(..., description="User who made the transaction")
-    amount:         float = Field(..., gt=0, description="Amount in the given currency")
-    currency:       str = Field(..., description="ISO currency code, e.g. USD")
-    timestamp:      str = Field(..., description="RFC3339 timestamp of the transaction")
-    country:        str = Field(..., description="2-letter country code")
+    transaction_id:  str           = Field(..., description="Unique transaction ID")
+    user_id:         str           = Field(..., description="User who made the transaction")
+    amount:          float         = Field(..., gt=0, description="Amount in the given currency")
+    currency:        str           = Field(..., description="ISO currency code, e.g. USD")
+    timestamp:       str           = Field(..., description="RFC3339 timestamp of the transaction")
+    country:         str           = Field(..., description="2-letter country code")
+    payment_method:  PaymentMethod = Field(..., description="Payment method details")
+    merchant:        Merchant      = Field(..., description="Merchant details")
 
 class AdminNotification(BaseModel):
     transaction: TransactionWebhook
@@ -64,27 +80,17 @@ async def transaction_webhook(
     if x_api_key != API_KEY:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorized")
 
-    # 2) LLM analysis with error-branching
+    # 2) LLM analysis with error handling
     try:
         analysis = analyze_transaction(payload.model_dump())
     except RuntimeError as e:
         msg = str(e)
         if "rate limit" in msg.lower():
-            raise HTTPException(
-                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                detail=msg
-            )
+            raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail=msg)
         else:
-            raise HTTPException(
-                status_code=status.HTTP_502_BAD_GATEWAY,
-                detail=msg
-            )
+            raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=msg)
     except Exception as e:
-        # unexpected errors
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=str(e)
-        )
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(e))
 
     # ← record the custom metric here
     risk_score_gauge.labels(
@@ -95,7 +101,7 @@ async def transaction_webhook(
     # 3) Structured logging
     logger.info("Analysis complete for txn %s: %s", payload.transaction_id, analysis)
 
-    # 4) Notify admin in background
+    # 4) Notify admin
     notification = AdminNotification(transaction=payload, analysis=analysis).model_dump()
     try:
         await send_admin_notification(notification)
