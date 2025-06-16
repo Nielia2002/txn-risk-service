@@ -14,17 +14,18 @@ MODEL = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
 
 def analyze_transaction(txn: dict) -> dict:
     prompt = (
-        "You are a financial risk analysis engine. "
-        "Given the following JSON transaction, output a JSON object with exactly "
-        "these keys:\n\n"
-        "  • risk_score (a number between 0 and 1)\n"
-        "  • risk_factors (an array of strings explaining what drove the score)\n"
-        "  • reasoning (a concise explanation in one paragraph)\n"
-        "  • recommended_action (one-sentence suggested next step)\n\n"
-        "Here is the transaction:\n\n"
-        f"{json.dumps(txn, indent=2)}\n\n"
-        "Respond **ONLY** with the JSON object."
-    )
+    "You are a financial risk analysis engine.  Given the following JSON transaction, output a JSON object with exactly these keys:\n\n"
+    "  • risk_score (0–1)\n"
+    "  • risk_factors (array of strings explaining what drove the score; be sure to consider:\n"
+    "      Payment method indicators: type (card, bank-transfer, crypto), whether it's new to the user, and any known associated risks.\n"
+    "      Merchant factors: merchant category code, known fraud rates for that category, and merchant reputation history.\n"
+    "      Transaction amount, currency, customer and payment-method country alignment, high-value flags, high-risk countries.\n"
+    "  )\n"
+    "  • reasoning (one-paragraph explanation)\n"
+    "  • recommended_action (one sentence)\n\n"
+    f"Here is the transaction:\n\n{json.dumps(txn, indent=2)}\n\nRespond **ONLY** with the JSON object."
+)
+
 
     response = client.chat.completions.create(
         model=MODEL,
