@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 # ./generate_traffic.sh
 
-# Change these if you’re on a different port or API key
 URL="http://localhost:8002/webhook/transaction"
 API_KEY="supersecret123"
 
